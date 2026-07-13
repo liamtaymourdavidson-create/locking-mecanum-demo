@@ -1,80 +1,137 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>Locking Mecanum Demo</title>
-
-<link rel="stylesheet" href="style.css">
-
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Locking Mecanum · Interactive Module</title>
+<meta name="description" content="Interactive teardown of a left-slant locking mecanum drive module: lock the rollers, cut a section, explode the assembly." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
 </head>
-
 <body>
 
-<div id="viewer"></div>
+<!-- 3D canvas mounts here -->
+<div id="viewer" aria-label="3D model of the locking mecanum module"></div>
+<div id="labels" aria-hidden="true"></div>
 
-<div id="ui">
+<!-- ambient chrome -->
+<div class="vignette" aria-hidden="true"></div>
+<div class="grid-overlay" aria-hidden="true"></div>
 
-<h1>LOCKING MECANUM</h1>
-
-<p>
-Switch between omnidirectional and traction drive.
-</p>
-
-<div class="buttons">
-
-<button id="lockButton">
-🔒 Lock Rollers
-</button>
-
-<button id="explodeButton">
-💥 Exploded View
-</button>
-
-<button id="demoButton">
-▶ Auto Demo
-</button>
-
-<button id="resetButton">
-⟳ Reset Camera
-</button>
-
+<!-- loading -->
+<div id="loader">
+  <div class="loader-ring"></div>
+  <div class="loader-text">LOADING MODULE<span id="loadPct">0%</span></div>
 </div>
 
-<div id="status">
-
-<div>
-<b>Servo</b>
-<span id="servoState">Unlocked</span>
+<!-- error -->
+<div id="errbox" hidden>
+  <b>Model failed to load.</b>
+  <span id="errmsg"></span>
 </div>
 
-<div>
-<b>Rollers</b>
-<span id="rollerState">Free Rolling</span>
+<!-- ============ HUD ============ -->
+<header id="titleblock">
+  <div class="eyebrow">3606-XXXX-0096 · LEFT-SLANT MODULE</div>
+  <h1>LOCKING<br><span>MECANUM</span></h1>
+  <p class="tagline">One wheel, two drivetrains. Free the rollers to strafe;
+     lock them for pure traction.</p>
+</header>
+
+<!-- telemetry -->
+<aside id="telemetry" aria-live="polite">
+  <div class="tel-head">TELEMETRY</div>
+
+  <div class="tel-row" data-k="mode">
+    <span class="tel-label">Drive mode</span>
+    <span class="tel-val" id="tMode">Omnidirectional</span>
+  </div>
+  <div class="tel-row" data-k="rollers">
+    <span class="tel-label">Rollers</span>
+    <span class="tel-val" id="tRollers">Free · rolling</span>
+  </div>
+  <div class="tel-row" data-k="servo">
+    <span class="tel-label">Servo θ</span>
+    <span class="tel-val" id="tServo">0°</span>
+  </div>
+  <div class="tel-row" data-k="wedge">
+    <span class="tel-label">Wedge travel</span>
+    <span class="tel-val" id="tWedge">0.0 mm</span>
+  </div>
+  <div class="tel-row" data-k="view">
+    <span class="tel-label">View</span>
+    <span class="tel-val" id="tView">Assembled</span>
+  </div>
+
+  <div class="statechip" id="stateChip"><i></i><span id="chipText">FREE</span></div>
+</aside>
+
+<!-- contextual explainer -->
+<section id="explainer">
+  <div class="exp-tab">HOW IT WORKS</div>
+  <h2 id="expTitle">Omnidirectional mode</h2>
+  <p id="expBody">
+    Ten rollers sit at 45° around the rim. Because each one spins freely on its
+    own axle, the wheel can roll forward <em>and</em> slip sideways — so the robot
+    can strafe in any direction. Hit <b>Lock rollers</b> to see what changes.
+  </p>
+</section>
+
+<!-- section controls (only in Section view) -->
+<div id="sectionctl" hidden>
+  <div class="sc-head">SECTION PLANE</div>
+  <div class="sc-axisrow" role="group" aria-label="Cut orientation">
+    <button class="sc-axis active" data-axis="face">Face cut</button>
+    <button class="sc-axis" data-axis="axle">Axle cut</button>
+  </div>
+  <label class="sc-depth">
+    <span>Depth</span>
+    <input id="depth" type="range" min="0" max="100" value="50" />
+  </label>
+  <label class="sc-flip">
+    <input id="flip" type="checkbox" /> Flip side
+  </label>
 </div>
 
-<div>
-<b>Mode</b>
-<span id="driveState">Omnidirectional</span>
-</div>
+<!-- main dock -->
+<nav id="dock" aria-label="Viewer controls">
+  <div class="seg" role="group" aria-label="View mode">
+    <button class="seg-btn active" data-view="assembled">Assembled</button>
+    <button class="seg-btn" data-view="section">Section</button>
+    <button class="seg-btn" data-view="exploded">Exploded</button>
+  </div>
 
-</div>
+  <div class="dock-sep"></div>
 
-</div>
+  <button id="lockBtn" class="dock-btn primary" aria-pressed="false">
+    <span class="ic">◎</span><span class="lbl">Lock rollers</span>
+  </button>
+  <button id="labelBtn" class="dock-btn" aria-pressed="true">
+    <span class="ic">⌖</span><span class="lbl">Labels</span>
+  </button>
+  <button id="spinBtn" class="dock-btn" aria-pressed="false">
+    <span class="ic">↻</span><span class="lbl">Spin wheel</span>
+  </button>
 
+  <div class="dock-sep"></div>
+
+  <button id="demoBtn" class="dock-btn ghost"><span class="ic">▶</span><span class="lbl">Auto demo</span></button>
+  <button id="resetBtn" class="dock-btn ghost"><span class="ic">⟲</span><span class="lbl">Reset</span></button>
+</nav>
+
+<button id="helpToggle" title="About this demo">i</button>
+
+<div id="importmap-holder"></div>
 <script type="importmap">
 {
-    "imports": {
-        "three": "https://unpkg.com/three@0.168.0/build/three.module.js",
-        "three/addons/":
-        "https://unpkg.com/three@0.168.0/examples/jsm/"
-    }
+  "imports": {
+    "three": "https://unpkg.com/three@0.168.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.168.0/examples/jsm/"
+  }
 }
 </script>
-
 <script type="module" src="main.js"></script>
-
 </body>
 </html>
