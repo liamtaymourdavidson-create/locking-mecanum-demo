@@ -1,0 +1,272 @@
+/* ===== GLOBAL ===== */
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Inter,Segoe UI,Arial,sans-serif;
+}
+
+html,body{
+    width:100%;
+    height:100%;
+    overflow:hidden;
+
+    background:
+    radial-gradient(circle at top,#303040 0%,#181820 40%,#090909 100%);
+
+    color:white;
+}
+
+/* ===== 3D VIEW ===== */
+
+#viewer{
+    position:absolute;
+    inset:0;
+}
+
+/* ===== UI PANEL ===== */
+
+#ui{
+
+    position:absolute;
+
+    top:24px;
+    left:24px;
+
+    width:360px;
+
+    padding:22px;
+
+    border-radius:20px;
+
+    backdrop-filter:blur(20px);
+
+    background:rgba(30,30,35,.72);
+
+    border:1px solid rgba(255,255,255,.08);
+
+    box-shadow:
+    0 20px 60px rgba(0,0,0,.45);
+
+}
+
+/* ===== TITLE ===== */
+
+h1{
+
+    font-size:30px;
+
+    font-weight:800;
+
+    letter-spacing:1px;
+
+    margin-bottom:10px;
+}
+
+p{
+
+    color:#b9b9c6;
+
+    line-height:1.5;
+
+    margin-bottom:20px;
+}
+
+/* ===== BUTTONS ===== */
+
+.buttons{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:12px;
+
+    margin-bottom:25px;
+}
+
+button{
+
+    padding:14px;
+
+    border:none;
+
+    border-radius:12px;
+
+    cursor:pointer;
+
+    color:white;
+
+    font-weight:700;
+
+    font-size:15px;
+
+    transition:
+    .25s transform,
+    .25s background,
+    .25s box-shadow;
+}
+
+button:hover{
+
+    transform:translateY(-2px);
+
+    box-shadow:
+    0 10px 30px rgba(0,0,0,.35);
+}
+
+button:active{
+
+    transform:scale(.98);
+}
+
+/* Button Colors */
+
+#lockButton{
+
+    background:#6d28d9;
+}
+
+#lockButton:hover{
+
+    background:#7c3aed;
+}
+
+#explodeButton{
+
+    background:#2563eb;
+}
+
+#explodeButton:hover{
+
+    background:#3b82f6;
+}
+
+#demoButton{
+
+    background:#059669;
+}
+
+#demoButton:hover{
+
+    background:#10b981;
+}
+
+#resetButton{
+
+    background:#52525b;
+}
+
+#resetButton:hover{
+
+    background:#71717a;
+}
+
+/* ===== STATUS ===== */
+
+#status{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:12px;
+}
+
+#status div{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    padding:10px 14px;
+
+    border-radius:10px;
+
+    background:rgba(255,255,255,.05);
+}
+
+#status span{
+
+    color:#6ee7ff;
+
+    font-weight:700;
+}
+
+/* ===== BADGE ===== */
+
+.badge{
+
+    display:inline-flex;
+
+    align-items:center;
+
+    gap:8px;
+
+    padding:6px 12px;
+
+    border-radius:999px;
+
+    background:#1d4ed8;
+
+    font-size:13px;
+}
+
+/* ===== INFO CARD ===== */
+
+.infoCard{
+
+    position:absolute;
+
+    bottom:25px;
+
+    left:50%;
+
+    transform:translateX(-50%);
+
+    padding:18px 28px;
+
+    border-radius:16px;
+
+    background:rgba(20,20,25,.75);
+
+    backdrop-filter:blur(15px);
+
+    color:white;
+
+    font-size:17px;
+
+    opacity:0;
+
+    transition:.35s;
+}
+
+.infoCard.show{
+
+    opacity:1;
+}
+
+/* ===== MOBILE ===== */
+
+@media(max-width:700px){
+
+#ui{
+
+    width:92%;
+
+    left:4%;
+
+    top:15px;
+}
+
+h1{
+
+    font-size:24px;
+}
+
+button{
+
+    font-size:14px;
+}
+}
