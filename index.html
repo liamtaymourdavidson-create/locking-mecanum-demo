@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Locking Mecanum Demo</title>
+
+<link rel="stylesheet" href="style.css">
+
+</head>
+
+<body>
+
+<div id="viewer"></div>
+
+<div id="ui">
+
+<h1>LOCKING MECANUM</h1>
+
+<p>
+Switch between omnidirectional and traction drive.
+</p>
+
+<div class="buttons">
+
+<button id="lockButton">
+🔒 Lock Rollers
+</button>
+
+<button id="explodeButton">
+💥 Exploded View
+</button>
+
+<button id="demoButton">
+▶ Auto Demo
+</button>
+
+<button id="resetButton">
+⟳ Reset Camera
+</button>
+
+</div>
+
+<div id="status">
+
+<div>
+<b>Servo</b>
+<span id="servoState">Unlocked</span>
+</div>
+
+<div>
+<b>Rollers</b>
+<span id="rollerState">Free Rolling</span>
+</div>
+
+<div>
+<b>Mode</b>
+<span id="driveState">Omnidirectional</span>
+</div>
+
+</div>
+
+</div>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://unpkg.com/three@0.168.0/build/three.module.js",
+        "three/addons/":
+        "https://unpkg.com/three@0.168.0/examples/jsm/"
+    }
+}
+</script>
+
+<script type="module" src="main.js"></script>
+
+</body>
+</html>
