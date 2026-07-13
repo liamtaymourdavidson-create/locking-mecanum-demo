@@ -1,6 +1,12 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import {
+    setModel,
+    toggleLock,
+    toggleExploded,
+    resetModel
+} from "./animation.js";
 
 const viewer = document.getElementById("viewer");
 
@@ -119,6 +125,7 @@ loader.load(
         model.scale.set(1,1,1);
 
         scene.add(model);
+        setModel(model);
 
     },
 
@@ -165,6 +172,24 @@ function animate(){
     renderer.render(scene,camera);
 
 }
+
+document
+.getElementById("lockButton")
+.onclick = toggleLock;
+
+document
+.getElementById("explodeButton")
+.onclick = toggleExploded;
+
+document
+.getElementById("resetButton")
+.onclick = ()=>{
+
+    resetModel();
+
+    controls.reset();
+
+};
 
 animate();
 
