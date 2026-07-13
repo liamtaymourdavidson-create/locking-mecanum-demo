@@ -91,7 +91,7 @@ const loader = new GLTFLoader();
 
 loader.load(
 
-    "assets/Left Slant Module.glb",
+    "https://raw.githubusercontent.com/liamtaymourdavidson-createlocking-mecanum-demo/blob/main/Left%20Slant%20Module.glb",
 
     (gltf)=>{
 
