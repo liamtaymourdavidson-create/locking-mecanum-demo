@@ -49,7 +49,7 @@ const PART = {
   },
 };
 
-const SLIDER_TRAVEL = 0.0042; // m the wedges push outward when locking
+const SLIDER_TRAVEL = 0.006; // m the wedges push outward when locking
 const WHEEL_CENTER = new THREE.Vector3(...PART.wheelCenter);
 const AXIS_X = new THREE.Vector3(1, 0, 0);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -72,7 +72,8 @@ document.getElementById("labels").appendChild(labelRenderer.domElement);
 const scene = new THREE.Scene();
 
 const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.005, 100);
-camera.position.set(0.17, 0.11, 0.22);
+camera.up.set(0, 0, 1);              // model is Onshape Z-up
+camera.position.set(0.06, -0.28, 0.16);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -114,14 +115,21 @@ const state = {
 // animated (tweened) values
 const anim = { lock: 0, explode: 0, sectionAmt: 0, sectionDepth: 0.5, spinVel: 0 };
 
-let model = null;
-let wheelSpin = null;
-const sliderPivots = [];
+let model = null;      // gltf.scene
+let root = null;       // the "Left Slant Module" node that actually holds the 71 parts
+let wheelSpin = null;  // everything that rotates with the wheel
+let actuationPivot = null; // the cam shaft (extra rotation on lock)
+let servoPivot = null;     // the servo arm (swings on lock)
+const wedgePivots = [];    // the 5 Jamming Joints (translate radially on lock)
 const rollerPivots = [];
 const rollerMats = [];
 const explodeGroups = []; // {obj, home:Vector3, offset:Vector3}
 const callouts = [];
 let modelBox = new THREE.Box3();
+
+const SPIN_NAMES = /Mecanum Wheel|Inner Core|Outer Core|96t Hub Mount Gear|Gear Mount/i;
+const LOCK_SHAFT_ANGLE = THREE.MathUtils.degToRad(72); // cam rotation when locking
+const LOCK_SERVO_ANGLE = THREE.MathUtils.degToRad(42);
 
 /* ============================================================
    Load
@@ -166,8 +174,11 @@ function onLoaded(gltf) {
     });
   });
 
-  buildWheelAndRollers();
-  buildSliders();
+  root = model.getObjectByName("Left Slant Module") || model.children[0] || model;
+
+  buildSpinAssembly();
+  buildWedges();
+  buildServoAndCam();
   frameModel();
   buildExplodeGroups();
   buildCallouts();
@@ -179,18 +190,18 @@ function onLoaded(gltf) {
   if (!reduceMotion) introSweep();
 }
 
-/* ---------- wheel spin group + per-roller pivots ---------- */
-function buildWheelAndRollers() {
+/* ---------- everything that rotates with the wheel ---------- */
+function buildSpinAssembly() {
   wheelSpin = new THREE.Group();
   wheelSpin.name = "__wheelSpin";
-  model.add(wheelSpin);
+  root.add(wheelSpin);
 
-  // move the whole mecanum wheel node under the spin group
-  let wheelNode = null;
-  model.traverse((o) => { if (!wheelNode && /Mecanum Wheel/i.test(o.name)) wheelNode = o; });
-  if (wheelNode) wheelSpin.attach(wheelNode);
+  // pull the rotating occurrences (wheel, hub cores, drive gear) into the spin group
+  root.children.slice().forEach((child) => {
+    if (child !== wheelSpin && SPIN_NAMES.test(child.name || "")) wheelSpin.attach(child);
+  });
 
-  // roller pivots
+  // per-roller pivots (each roller free-spins on its own slant axis)
   PART.rollers.forEach((r) => {
     const p = new THREE.Group();
     p.position.set(...r.center);
@@ -198,11 +209,9 @@ function buildWheelAndRollers() {
     wheelSpin.add(p);
     rollerPivots.push(p);
   });
-
-  // attach each roller mesh to nearest pivot; collect a material to tint
   const tmp = new THREE.Vector3();
   const rollerMeshes = [];
-  model.traverse((o) => {
+  wheelSpin.traverse((o) => {
     if (o.isMesh && /roller/i.test(o.name) && !/side plate/i.test(o.name)) rollerMeshes.push(o);
   });
   rollerMeshes.forEach((mesh) => {
@@ -221,29 +230,42 @@ function buildWheelAndRollers() {
   });
 }
 
-/* ---------- slider (jamming wedge) pivots ---------- */
-function buildSliders() {
-  const sliders = [], joints = [];
-  model.traverse((o) => {
-    if (o.name === "Slider") sliders.push(o);
-    else if (o.name === "Joint") joints.push(o);
-  });
-  const tmp = new THREE.Vector3();
-  const nearest = (arr, target) => {
-    let best = null, bd = Infinity;
-    arr.forEach((o) => { o.getWorldPosition(tmp); const d = tmp.distanceTo(target); if (d < bd) { bd = d; best = o; } });
-    return best;
-  };
-  PART.sliders.forEach((s) => {
-    const c = new THREE.Vector3(...s.center);
+/* ---------- the 5 jamming wedges: push radially outward on lock ---------- */
+function buildWedges() {
+  const c = new THREE.Vector3();
+  for (let i = 1; i <= 5; i++) {
+    const jj = root.getObjectByName("Jamming Joint <" + i + ">");
+    if (!jj) continue;
+    new THREE.Box3().setFromObject(jj).getCenter(c);
+    // outward direction from the axle (YZ plane); X component stays 0
+    const radial = new THREE.Vector3(0, c.y - WHEEL_CENTER.y, c.z - WHEEL_CENTER.z);
+    if (radial.lengthSq() < 1e-9) radial.set(0, 1, 0);
+    radial.normalize();
     const pivot = new THREE.Group();
-    pivot.userData.radial = new THREE.Vector3(...s.radial).normalize();
-    pivot.userData.home = new THREE.Vector3(0, 0, 0);
-    model.add(pivot);
-    const sl = nearest(sliders, c); if (sl) pivot.attach(sl);
-    const jo = nearest(joints, c); if (jo) pivot.attach(jo);
-    sliderPivots.push(pivot);
-  });
+    wheelSpin.add(pivot);            // rides with the wheel, and carries the wedge outward
+    pivot.attach(jj);
+    pivot.userData.radial = radial;  // stored in wheelSpin-local frame (== world at rest)
+    wedgePivots.push(pivot);
+  }
+}
+
+/* ---------- servo arm + actuation cam ---------- */
+function buildServoAndCam() {
+  // cam shaft: rotates about the axle (X) when locking; spins with the wheel too
+  const shaft = root.getObjectByName("occurrence of Actuation Shaft") || root.getObjectByName("Actuation Shaft");
+  actuationPivot = new THREE.Group();
+  wheelSpin.add(actuationPivot);
+  if (shaft) actuationPivot.attach(shaft);
+
+  // servo arm: swings about the axle-parallel axis through its own base
+  const arm = root.getObjectByName("occurrence of Servo Arm") || root.getObjectByName("Servo Arm");
+  if (arm) {
+    const c = new THREE.Box3().setFromObject(arm).getCenter(new THREE.Vector3());
+    servoPivot = new THREE.Group();
+    servoPivot.position.copy(c);
+    root.add(servoPivot);
+    servoPivot.attach(arm);
+  }
 }
 
 /* ---------- camera framing ---------- */
@@ -251,8 +273,9 @@ function frameModel() {
   modelBox.setFromObject(model);
   const size = modelBox.getSize(new THREE.Vector3());
   const maxd = Math.max(size.x, size.y, size.z);
-  const dist = maxd * 1.75;
-  const dir = new THREE.Vector3(0.55, 0.42, 0.9).normalize();
+  const dist = maxd * 1.85;
+  // front-top view from slightly motor-side, Z up — matches the CAD screenshot
+  const dir = new THREE.Vector3(0.32, -0.9, 0.52).normalize();
   camera.position.copy(WHEEL_CENTER).add(dir.multiplyScalar(dist));
   controls.target.copy(WHEEL_CENTER);
   controls.maxDistance = maxd * 4;
@@ -266,8 +289,8 @@ function saveHome() { camHome.pos.copy(camera.position); camHome.tgt.copy(contro
 function buildExplodeGroups() {
   const wc = WHEEL_CENTER;
   const c = new THREE.Vector3();
-  model.children.forEach((child) => {
-    if (child.type === "AmbientLight") return;
+  root.children.slice().forEach((child) => {
+    if (!child.visible && child.type.includes("Light")) return;
     const box = new THREE.Box3().setFromObject(child);
     if (box.isEmpty()) return;
     box.getCenter(c);
@@ -276,29 +299,22 @@ function buildExplodeGroups() {
     if (radial.lengthSq() < 1e-9) radial.set(0, 1, 0);
     radial.normalize();
     const dx = c.x - wc.x;
-    let off = new THREE.Vector3();
+    const off = new THREE.Vector3();
 
     if (child === wheelSpin) {
-      off.set(0, 0, 0); // wheel stays as the anchor
-    } else if (/Motor|Servo|Mata/i.test(name)) {
-      off.set(0.13, 0, 0).addScaledVector(radial, 0.02);
-    } else if (/Actuation Shaft/i.test(name)) {
+      off.set(-0.055, 0, 0);                                   // pull the whole wheel/hub subassembly off the axle
+    } else if (child === servoPivot || /Motor|Mata/i.test(name)) {
+      off.set(0.14, 0, 0).addScaledVector(radial, 0.015);      // motor & servo out the back
+    } else if (/Inner Plate/i.test(name)) {
       off.set(0.075, 0, 0);
-    } else if (/Gear|96t/i.test(name)) {
-      off.set(0.05, 0, 0);
-    } else if (/Inner (Plate|Core)/i.test(name)) {
-      off.set(0.035, 0, 0);
-    } else if (/Outer (Plate|Core)/i.test(name)) {
-      off.set(-0.045, 0, 0);
+    } else if (/Outer Plate|Outer Core/i.test(name)) {
+      off.set(-0.12, 0, 0);
     } else if (/Square Beam/i.test(name)) {
-      off.copy(radial).multiplyScalar(0.06).setX(dx * 0.2); // open the cage
-    } else if (/Button|Socket|Nut|Locknut|Bearing|spacer|Thrust|e-clip|Screw/i.test(name)) {
-      off.copy(radial).multiplyScalar(0.055); off.x += dx > 0 ? 0.03 : -0.02; // scatter fasteners
-    } else if (sliderPivots.includes(child)) {
-      child.userData.exOffset = new THREE.Vector3(0.024, 0, 0); // handled in slider loop
-      return;
+      off.copy(radial).multiplyScalar(0.075); off.x = dx * 0.2; // open the cage outward
+    } else if (/Button|Socket|Nut|Locknut|Bearing|spacer|Thrust|Screw|Shoulder/i.test(name)) {
+      off.copy(radial).multiplyScalar(0.06); off.x += dx > 0 ? 0.05 : -0.03; // scatter fasteners
     } else {
-      off.copy(radial).multiplyScalar(0.03); off.x += dx * 0.4;
+      off.copy(radial).multiplyScalar(0.035); off.x += dx * 0.5;
     }
     explodeGroups.push({ obj: child, home: child.position.clone(), offset: off });
   });
@@ -590,27 +606,27 @@ function animate() {
     if (depthSweep.t >= 1) depthSweep = null;
   }
 
-  // sliders push out with lock (and drift out in the exploded view)
-  const travel = SLIDER_TRAVEL * easeInOut(anim.lock);
-  sliderPivots.forEach((p) => {
-    tmpV.copy(p.userData.radial).multiplyScalar(travel).add(p.userData.home);
-    if (p.userData.exOffset) tmpV.addScaledVector(p.userData.exOffset, anim.explode);
-    p.position.copy(tmpV);
-  });
+  // LOCK: all 5 wedges push radially out; cam shaft + servo arm rotate
+  const e = easeInOut(anim.lock);
+  const travel = SLIDER_TRAVEL * e;
+  wedgePivots.forEach((p) => p.position.copy(p.userData.radial).multiplyScalar(travel));
+  if (actuationPivot) actuationPivot.rotation.set(e * LOCK_SHAFT_ANGLE, 0, 0);
+  if (servoPivot) servoPivot.rotation.set(e * LOCK_SERVO_ANGLE, 0, 0);
 
-  // explode positions
+  // explode positions (wheel subassembly + frame + drivetrain)
   explodeGroups.forEach((g) => {
     g.obj.position.copy(g.home).addScaledVector(g.offset, anim.explode);
   });
 
-  // roller idle spin when free (+ optional wheel spin)
+  // roller idle spin when free
   const free = 1 - anim.lock;
   if (!reduceMotion && state.view !== "exploded") {
     const rate = free * 2.6 * dt;
     if (rate > 0.0001) rollerPivots.forEach((p) => p.rotateOnAxis(p.userData.axis, rate));
   }
+  // SPIN wheel about the axle
   anim.spinVel = tick(anim.spinVel, state.spin ? 1 : 0, 3, dt);
-  if (wheelSpin && anim.spinVel > 0.001) wheelSpin.rotateOnWorldAxis(AXIS_X, anim.spinVel * 0.9 * dt);
+  if (wheelSpin && anim.spinVel > 0.001) wheelSpin.rotateOnWorldAxis(AXIS_X, anim.spinVel * 1.5 * dt);
 
   // roller tint (free = teal, locked = purple)
   rollerMats.forEach((m) => {
@@ -619,8 +635,8 @@ function animate() {
   });
 
   // telemetry live values
-  document.getElementById("tServo").textContent = Math.round(anim.lock * 62) + "°";
-  document.getElementById("tWedge").textContent = (easeInOut(anim.lock) * SLIDER_TRAVEL * 1000).toFixed(1) + " mm";
+  document.getElementById("tServo").textContent = Math.round(e * 42) + "°";
+  document.getElementById("tWedge").textContent = (e * SLIDER_TRAVEL * 1000).toFixed(1) + " mm";
 
   // camera tween
   if (camTween) {
